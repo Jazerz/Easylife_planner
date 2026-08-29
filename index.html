@@ -66,7 +66,7 @@
     <div id="root"></div>
     <script type="text/babel">
       // Get React tools used to store data and run code when the app changes.
-      const { useEffect, useMemo, useState } = React;
+      const { useEffect, useMemo, useRef, useState } = React;
 
       // Firebase project details. These identify the Easylife Planner Firebase project.
       // They are used by the browser to connect to Firebase Authentication and Firestore.
@@ -131,8 +131,8 @@
 
       function App() {
         const [page, setPage] = useState('Dashboard');
-        const [tasks, setTasks] = useState(() => JSON.parse(localStorage.getItem('easylife-tasks') || 'null') || initialTasks);
-        const [routine, setRoutine] = useState(() => normalizeRoutine(JSON.parse(localStorage.getItem('easylife-routine') || 'null')));
+        const [tasks, setTasks] = useState(initialTasks);
+        const [routine, setRoutine] = useState(initialRoutine);
         const [selectedId, setSelectedId] = useState(null);
         const [search, setSearch] = useState('');
         const [showNewTask, setShowNewTask] = useState(false);
@@ -142,6 +142,7 @@
         const [user, setUser] = useState(null);
         const [plannerReady, setPlannerReady] = useState(false);
         const [authError, setAuthError] = useState('');
+        const applyingRemoteData = useRef(false);
         const [darkMode, setDarkMode] = useState(() => localStorage.getItem('easylife-theme') === 'dark');
         const [newTask, setNewTask] = useState({ name: '', priority: 'Medium', due: '2026-08-30', category: 'Study' });
         const selectedTask = tasks.find(task => task.id === selectedId);
@@ -149,35 +150,50 @@
         const percentage = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
         const visibleTasks = tasks.filter(task => task.name.toLowerCase().includes(search.toLowerCase()));
 
-        useEffect(() => localStorage.setItem('easylife-tasks', JSON.stringify(tasks)), [tasks]);
-        useEffect(() => localStorage.setItem('easylife-routine', JSON.stringify(routine)), [routine]);
         useEffect(() => {
-          let unsubscribe;
+          // Listen for account changes, then subscribe to that account's planner document.
+          let unsubscribeAuth;
+          let unsubscribePlanner;
           firebaseReady.then(services => {
             if (!services) { setPlannerReady(true); return; }
             setFirebase(services);
-            unsubscribe = services.onAuthStateChanged(services.auth, async currentUser => {
+            const db = services.getFirestore();
+            unsubscribeAuth = services.onAuthStateChanged(services.auth, currentUser => {
+              if (unsubscribePlanner) unsubscribePlanner();
               setPlannerReady(false);
               setUser(currentUser);
-              if (currentUser) {
-                try {
-                  const snapshot = await services.getDoc(services.doc(services.db || services.getFirestore(), 'users', currentUser.uid, 'planner', 'main'));
-                  if (snapshot.exists()) {
-                    const saved = snapshot.data();
-                    if (saved.tasks) setTasks(saved.tasks);
-                    if (saved.routine) setRoutine(normalizeRoutine(saved.routine));
-                  }
-                } catch (error) { setAuthError('Your account is signed in, but planner data could not be loaded. Check Firestore setup and rules.'); }
+              if (!currentUser) {
+                applyingRemoteData.current = true;
+                setTasks(initialTasks);
+                setRoutine(initialRoutine);
+                setPlannerReady(true);
+                return;
               }
-              setPlannerReady(true);
+              // onSnapshot keeps this page updated when data changes on another device or tab.
+              const plannerRef = services.doc(db, 'users', currentUser.uid, 'planner', 'main');
+              unsubscribePlanner = services.onSnapshot(plannerRef, snapshot => {
+                if (snapshot.exists()) {
+                  const saved = snapshot.data();
+                  applyingRemoteData.current = true;
+                  setTasks(saved.tasks || initialTasks);
+                  setRoutine(normalizeRoutine(saved.routine));
+                } else {
+                  // First-time account: create an empty starter planner document.
+                  services.setDoc(plannerRef, { tasks: initialTasks, routine: initialRoutine, updatedAt: services.serverTimestamp() });
+                }
+                setPlannerReady(true);
+              }, () => { setAuthError('Your account is signed in, but planner data could not be loaded. Check Firestore setup and rules.'); setPlannerReady(true); });
             });
           });
-          return () => unsubscribe && unsubscribe();
+          return () => { if (unsubscribeAuth) unsubscribeAuth(); if (unsubscribePlanner) unsubscribePlanner(); };
         }, []);
         useEffect(() => {
           if (!firebase || !user || !plannerReady) return;
-          const db = firebase.db || firebase.getFirestore();
-          firebase.setDoc(firebase.doc(db, 'users', user.uid, 'planner', 'main'), { tasks, routine, updatedAt: firebase.serverTimestamp() }, { merge: true }).catch(() => setAuthError('Changes are saved in this browser, but could not sync to Firestore.'));
+          // Do not write again when this state change came from Firestore itself.
+          if (applyingRemoteData.current) { applyingRemoteData.current = false; return; }
+          const plannerRef = firebase.doc(firebase.getFirestore(), 'users', user.uid, 'planner', 'main');
+          // Save edits to the existing document; setDoc is the fallback for a new document.
+          firebase.updateDoc(plannerRef, { tasks, routine, updatedAt: firebase.serverTimestamp() }).catch(() => firebase.setDoc(plannerRef, { tasks, routine, updatedAt: firebase.serverTimestamp() }).catch(() => setAuthError('Changes could not sync to Firestore.')));
         }, [tasks, routine, firebase, user, plannerReady]);
         useEffect(() => {
           localStorage.setItem('easylife-theme', darkMode ? 'dark' : 'light');
