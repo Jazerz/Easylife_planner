@@ -169,6 +169,8 @@
                 applyingRemoteData.current = true;
                 setTasks(initialTasks);
                 setRoutine(initialRoutine);
+                setSelectedId(null);
+                setShowNewTask(false);
                 setPlannerReady(true);
                 return;
               }
@@ -252,23 +254,21 @@
               <nav className="space-y-1">
                 {[['Dashboard','grid'],['Calendar','calendar'],['Statistics','chart'],['Settings','settings']].map(([label, icon]) => <button key={label} onClick={() => setPage(label)} className={'flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition ' + (page === label ? 'bg-indigo-50 text-brand' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}><Icon name={icon}/>{label}</button>)}
               </nav>
-              <div className="mt-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-brand p-4 text-white shadow-lg shadow-indigo-100">
-                <p className="text-xs font-medium text-indigo-100">This week</p><p className="mt-1 text-2xl font-bold">{percentage}% <span className="text-sm font-medium">done</span></p><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/25"><div className="h-full rounded-full bg-white" style={{width: percentage + '%'}} /></div>
-                <p className="mt-3 text-[11px] leading-relaxed text-indigo-100">Small steps still move you forward.</p>
-              </div>
+              <div className="mt-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-brand p-4 text-white shadow-lg shadow-indigo-100">{user ? <><p className="text-xs font-medium text-indigo-100">This week</p><p className="mt-1 text-2xl font-bold">{percentage}% <span className="text-sm font-medium">done</span></p><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/25"><div className="h-full rounded-full bg-white" style={{width: percentage + '%'}} /></div><p className="mt-3 text-[11px] leading-relaxed text-indigo-100">Small steps still move you forward.</p></> : <><p className="text-sm font-bold">Your private planner</p><p className="mt-2 text-[11px] leading-relaxed text-indigo-100">Sign in to view and manage your own tasks, routines, and progress.</p><button onClick={() => setShowAuth(true)} className="mt-4 rounded-lg bg-white px-3 py-2 text-xs font-bold text-brand">Log in</button></>}</div>
               <div className="mt-6 flex items-center gap-3 px-2"><div className="grid h-9 w-9 place-items-center rounded-full bg-orange-100 text-sm font-bold text-orange-600">{avatarLetter}</div><div><p className="text-sm font-bold">{displayName}</p><p className="text-[11px] text-slate-400">{user ? 'Free plan' : 'Sign in to sync'}</p></div><Icon name="dots" size={18}/></div>
             </aside>
 
             <main className="min-w-0 flex-1 overflow-hidden">
               <header className="flex h-[88px] items-center justify-between bg-cloud px-5 sm:px-8 lg:px-10">
                 <div><p className="text-xs font-semibold uppercase tracking-[.16em] text-brand">{page === 'Dashboard' ? 'Thursday, August 28' : 'Easylife Planner'}</p><h2 className="mt-1 text-2xl font-extrabold tracking-tight sm:text-[28px]">{page === 'Dashboard' ? (user ? `Good morning, ${displayName}!` : 'Welcome to Easylife!') : page}</h2></div>
-                <div className="flex items-center gap-3"><button onClick={() => setDarkMode(current => !current)} aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} className="rounded-xl bg-white p-2.5 text-slate-500 shadow-sm transition hover:text-brand"><span className="text-base leading-none">{darkMode ? '☀︎' : '☾'}</span></button>{user ? <div className="hidden items-center gap-2 sm:flex"><span title={user.email} className="max-w-28 truncate text-xs font-bold text-slate-500">{user.email}</span><button onClick={signOut} className="rounded-xl bg-white px-3 py-2.5 text-xs font-bold text-slate-500 shadow-sm transition hover:text-brand">Log out</button></div> : <button onClick={() => setShowAuth(true)} className="rounded-xl bg-white px-3 py-2.5 text-xs font-bold text-brand shadow-sm transition hover:bg-indigo-50">Log in</button>}<button onClick={() => setShowNewTask(true)} className="flex items-center gap-2 rounded-xl bg-brand px-3.5 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-600"><Icon name="plus" size={17}/><span className="hidden sm:inline">Add task</span></button></div>
+                <div className="flex items-center gap-3"><button onClick={() => setDarkMode(current => !current)} aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} className="rounded-xl bg-white p-2.5 text-slate-500 shadow-sm transition hover:text-brand"><span className="text-base leading-none">{darkMode ? '☀︎' : '☾'}</span></button>{user ? <><div className="hidden items-center gap-2 sm:flex"><span title={user.email} className="max-w-28 truncate text-xs font-bold text-slate-500">{user.email}</span><button onClick={signOut} className="rounded-xl bg-white px-3 py-2.5 text-xs font-bold text-slate-500 shadow-sm transition hover:text-brand">Log out</button></div><button onClick={() => setShowNewTask(true)} className="flex items-center gap-2 rounded-xl bg-brand px-3.5 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-600"><Icon name="plus" size={17}/><span className="hidden sm:inline">Add task</span></button></> : <button onClick={() => setShowAuth(true)} className="rounded-xl bg-white px-3 py-2.5 text-xs font-bold text-brand shadow-sm transition hover:bg-indigo-50">Log in</button>}</div>
               </header>
               <div className="scrollbar-thin h-[calc(100vh-88px)] overflow-y-auto px-5 pb-8 sm:px-8 lg:px-10">
-                {page === 'Dashboard' && <Dashboard routine={routine} tasks={visibleTasks} allTasks={tasks} search={search} setSearch={setSearch} openRoutine={setRoutinePanel} toggleRoutine={toggleRoutine} setSelectedId={setSelectedId} updateTask={updateTask} />}
-                {page === 'Calendar' && <Calendar tasks={tasks} setSelectedId={setSelectedId} addTaskForDate={openNewTaskForDate} />}
-                {page === 'Statistics' && <Statistics tasks={tasks} routine={routine} />}
-                {page === 'Settings' && <Settings darkMode={darkMode} setDarkMode={setDarkMode} user={user} displayName={displayName} avatarLetter={avatarLetter} />}
+                {!user && <GuestWelcome openAuth={() => setShowAuth(true)} />}
+                {user && page === 'Dashboard' && <Dashboard routine={routine} tasks={visibleTasks} allTasks={tasks} search={search} setSearch={setSearch} openRoutine={setRoutinePanel} toggleRoutine={toggleRoutine} setSelectedId={setSelectedId} updateTask={updateTask} />}
+                {user && page === 'Calendar' && <Calendar tasks={tasks} setSelectedId={setSelectedId} addTaskForDate={openNewTaskForDate} />}
+                {user && page === 'Statistics' && <Statistics tasks={tasks} routine={routine} />}
+                {user && page === 'Settings' && <Settings darkMode={darkMode} setDarkMode={setDarkMode} user={user} displayName={displayName} avatarLetter={avatarLetter} />}
               </div>
             </main>
           </div>
@@ -280,6 +280,7 @@
         </div>;
       }
 
+      function GuestWelcome({ openAuth }) { return <section className="mx-auto mt-10 max-w-xl rounded-2xl bg-white p-8 text-center shadow-soft sm:mt-16"><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-indigo-50 text-brand"><Icon name="grid" size={25}/></div><h3 className="mt-5 text-2xl font-extrabold">Your planner is private</h3><p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-slate-500">Log in or create an account to see your tasks, weekly routine, calendar, and personal statistics.</p><button onClick={openAuth} className="mt-6 rounded-xl bg-brand px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200">Log in or sign up</button></section>; }
       function Dashboard({ routine, tasks, allTasks, search, setSearch, openRoutine, toggleRoutine, setSelectedId, updateTask }) {
         const completed = allTasks.filter(task => task.done).length;
         return <>
