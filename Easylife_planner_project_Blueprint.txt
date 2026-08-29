@@ -1,0 +1,45 @@
+chat:
+I have an idea. I want to create a website that will be a dashboard planner for manage work and time for student or every workman.
+Project name : Easylife Planner
+concept : 
+1.No complex UX/UI
+2.Have calendar that can link to main data base and connect to another table or dashboard
+3.daily routine do in board that have 7 column for show every day in a week and user can edit each day like on Monday want to read Biology and Tuesday want to read Physic 
+4.have table of task/work that you must do header will contain [4.1 name(work name) 4.2priority(Priority of that work) 4.3duedate 4.4Done(checkbox)]. add-on when user click on work animate and open more info in right side bar and for left sidebar is dashboard view (user can see in one view not to click back and forward many times)
+5.make a statistics chart in another page of daily routine and another (you make for me i cant think what else will have) so user can see the progress and have motivation
+
+System:
+1.Online Login system 
+2.Send alert in email or in chat of discord
+3.database management 
+4.another system you Recommendations me
+
+this is all about this website
+
+do not start yet just make a plan and tell me what you will do 
+
+
+Project Context:
+Project Name: Easylife Planner.
+
+Objective: A dashboard planner to manage work and time for students and workers.
+
+Design Philosophy: Zero complex UX/UI; the user can see all tools in one view without clicking back and forth.
+
+Frontend Architecture
+Tech Stack: React (JSX) and Tailwind CSS. The current development environment is running directly in the browser via CDN using Babel and Live Server in an index.html file.
+
+Left Sidebar (Static): Houses quick navigation links to the main Dashboard, Calendar, Statistics, and Settings.
+
+Center Workspace (Dynamic): Features a 7-column Daily Routine board to assign custom subjects to specific days (e.g., Biology on Monday, Physics on Tuesday). Below the routine board is a Task Table with headers for Done (checkbox), Name, Priority, and Due Date.
+
+Right Sidebar (Animated Overlay): Remains hidden until the user clicks a specific task, at which point it slides in from the right edge to display extended task descriptions, sub-tasks, and notes.
+
+Backend & System Requirements
+Database Integration: A central database management system must seamlessly link the tasks, routine board, and an interactive calendar together.
+
+Authentication: Requires a secure online login system.
+
+Notifications: Needs an automated system to send task alerts via email or Discord chat.
+
+Data Visualization: Requires a dedicated Statistics page with charts mapping daily routines to show user progress and build motivation.

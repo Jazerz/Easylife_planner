@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Easylife Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            boxShadow: { soft: '0 12px 35px rgba(31, 45, 61, .08)' },
+            colors: { ink: '#202B3D', cloud: '#F6F7FB', brand: '#5367F3' }
+          }
+        }
+      }
+    </script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      body { background: #F6F7FB; color: #202B3D; }
+      * { box-sizing: border-box; }
+      .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+      .scrollbar-thin::-webkit-scrollbar-thumb { background: #d9ddea; border-radius: 999px; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel">
+      const { useEffect, useMemo, useState } = React;
+
+      const initialTasks = [
+        { id: 1, name: 'Read Biology chapter 4', priority: 'High', due: '2026-08-28', done: false, category: 'Study', description: 'Review cell division, then write a one-page summary.', subtasks: [{ id: 11, title: 'Read pages 84–102', done: true }, { id: 12, title: 'Make flashcards', done: false }] },
+        { id: 2, name: 'Prepare project presentation', priority: 'High', due: '2026-08-30', done: false, category: 'Work', description: 'Prepare the first draft of slides and check all numbers.', subtasks: [{ id: 21, title: 'Outline key points', done: true }, { id: 22, title: 'Build slides', done: false }] },
+        { id: 3, name: 'Physics problem set', priority: 'Medium', due: '2026-08-29', done: false, category: 'Study', description: 'Complete questions 1–12 before Friday evening.', subtasks: [] },
+        { id: 4, name: 'Reply to study group', priority: 'Low', due: '2026-08-27', done: true, category: 'Personal', description: 'Confirm the time for the next group revision session.', subtasks: [] }
+      ];
+
+      const initialRoutine = {
+        Mon: ['Biology · 09:00', 'Workout · 17:30'], Tue: ['Physics · 10:00'], Wed: ['Project work · 14:00'],
+        Thu: ['Math revision · 09:30'], Fri: ['Biology lab · 13:00'], Sat: ['Weekly review · 10:00'], Sun: ['Plan next week · 18:00']
+      };
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const dayLong = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
+
+      function Icon({ name, size = 18, stroke = 2 }) {
+        const paths = {
+          grid: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
+          calendar: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></>,
+          chart: <><path d="M4 19V5M4 19h17"/><path d="m7 15 4-5 3 3 6-7"/></>,
+          settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.1 2.1-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.55V20h-3v-.09A1.7 1.7 0 0 0 10.7 18.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.1-2.1.06-.06A1.7 1.7 0 0 0 7.06 15 1.7 1.7 0 0 0 5.5 14H5v-3h.09A1.7 1.7 0 0 0 6.6 10a1.7 1.7 0 0 0-.34-1.88L6.2 8.06l2.1-2.1.06.06A1.7 1.7 0 0 0 10.24 6.36 1.7 1.7 0 0 0 11.27 4.8V4h3v.09a1.7 1.7 0 0 0 1.03 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.1 2.1-.06.06A1.7 1.7 0 0 0 18.94 10 1.7 1.7 0 0 0 20.5 11h.5v3h-.09A1.7 1.7 0 0 0 19.4 15Z"/></>,
+          plus: <path d="M12 5v14M5 12h14"/>, close: <path d="m6 6 12 12M18 6 6 18"/>, check: <path d="m5 12 4 4L19 6"/>, chevron: <path d="m9 18 6-6-6-6"/>, bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></>, search: <><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></>, dots: <><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/></>
+        };
+        return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>
+      }
+
+      function Badge({ priority }) {
+        const styles = { High: 'bg-rose-50 text-rose-600 ring-rose-100', Medium: 'bg-amber-50 text-amber-600 ring-amber-100', Low: 'bg-emerald-50 text-emerald-600 ring-emerald-100' };
+        return <span className={'rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ' + styles[priority]}>{priority}</span>;
+      }
+
+      function App() {
+        const [page, setPage] = useState('Dashboard');
+        const [tasks, setTasks] = useState(() => JSON.parse(localStorage.getItem('easylife-tasks') || 'null') || initialTasks);
+        const [routine, setRoutine] = useState(() => JSON.parse(localStorage.getItem('easylife-routine') || 'null') || initialRoutine);
+        const [selectedId, setSelectedId] = useState(null);
+        const [search, setSearch] = useState('');
+        const [showNewTask, setShowNewTask] = useState(false);
+        const [newTask, setNewTask] = useState({ name: '', priority: 'Medium', due: '2026-08-30', category: 'Study' });
+        const selectedTask = tasks.find(task => task.id === selectedId);
+        const completed = tasks.filter(task => task.done).length;
+        const percentage = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
+        const visibleTasks = tasks.filter(task => task.name.toLowerCase().includes(search.toLowerCase()));
+
+        useEffect(() => localStorage.setItem('easylife-tasks', JSON.stringify(tasks)), [tasks]);
+        useEffect(() => localStorage.setItem('easylife-routine', JSON.stringify(routine)), [routine]);
+
+        const updateTask = (id, changes) => setTasks(current => current.map(task => task.id === id ? { ...task, ...changes } : task));
+        const addTask = (event) => {
+          event.preventDefault();
+          if (!newTask.name.trim()) return;
+          const task = { ...newTask, id: Date.now(), name: newTask.name.trim(), done: false, description: '', subtasks: [] };
+          setTasks(current => [task, ...current]);
+          setNewTask({ name: '', priority: 'Medium', due: '2026-08-30', category: 'Study' });
+          setShowNewTask(false);
+          setSelectedId(task.id);
+        };
+        const addRoutine = (day) => {
+          const value = window.prompt(`Add an activity for ${dayLong[day]}`);
+          if (value && value.trim()) setRoutine(current => ({ ...current, [day]: [...current[day], value.trim()] }));
+        };
+        const removeRoutine = (day, index) => setRoutine(current => ({ ...current, [day]: current[day].filter((_, i) => i !== index) }));
+
+        return <div className="min-h-screen bg-cloud font-sans text-ink">
+          <div className="flex min-h-screen">
+            <aside className="hidden w-[248px] shrink-0 flex-col border-r border-slate-100 bg-white px-5 py-7 lg:flex">
+              <div className="mb-12 flex items-center gap-3 px-2">
+                <div className="grid h-10 w-10 place-items-center rounded-xl bg-brand text-xl font-black text-white shadow-lg shadow-indigo-200">E</div>
+                <div><h1 className="text-[17px] font-extrabold tracking-tight">Easylife</h1><p className="text-xs text-slate-400">Planner</p></div>
+              </div>
+              <nav className="space-y-1">
+                {[['Dashboard','grid'],['Calendar','calendar'],['Statistics','chart'],['Settings','settings']].map(([label, icon]) => <button key={label} onClick={() => setPage(label)} className={'flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition ' + (page === label ? 'bg-indigo-50 text-brand' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700')}><Icon name={icon}/>{label}</button>)}
+              </nav>
+              <div className="mt-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-brand p-4 text-white shadow-lg shadow-indigo-100">
+                <p className="text-xs font-medium text-indigo-100">This week</p><p className="mt-1 text-2xl font-bold">{percentage}% <span className="text-sm font-medium">done</span></p><div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/25"><div className="h-full rounded-full bg-white" style={{width: percentage + '%'}} /></div>
+                <p className="mt-3 text-[11px] leading-relaxed text-indigo-100">Small steps still move you forward.</p>
+              </div>
+              <div className="mt-6 flex items-center gap-3 px-2"><div className="grid h-9 w-9 place-items-center rounded-full bg-orange-100 text-sm font-bold text-orange-600">C</div><div><p className="text-sm font-bold">Chawi</p><p className="text-[11px] text-slate-400">Free plan</p></div><Icon name="dots" size={18}/></div>
+            </aside>
+
+            <main className="min-w-0 flex-1 overflow-hidden">
+              <header className="flex h-[88px] items-center justify-between bg-cloud px-5 sm:px-8 lg:px-10">
+                <div><p className="text-xs font-semibold uppercase tracking-[.16em] text-brand">{page === 'Dashboard' ? 'Thursday, August 28' : 'Easylife Planner'}</p><h2 className="mt-1 text-2xl font-extrabold tracking-tight sm:text-[28px]">{page === 'Dashboard' ? 'Good morning, Chawi!' : page}</h2></div>
+                <div className="flex items-center gap-3"><button className="hidden rounded-xl bg-white p-2.5 text-slate-500 shadow-sm sm:block"><Icon name="bell" size={19}/></button><button onClick={() => setShowNewTask(true)} className="flex items-center gap-2 rounded-xl bg-brand px-3.5 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-600"><Icon name="plus" size={17}/><span className="hidden sm:inline">Add task</span></button></div>
+              </header>
+              <div className="scrollbar-thin h-[calc(100vh-88px)] overflow-y-auto px-5 pb-8 sm:px-8 lg:px-10">
+                {page === 'Dashboard' && <Dashboard routine={routine} tasks={visibleTasks} allTasks={tasks} search={search} setSearch={setSearch} addRoutine={addRoutine} removeRoutine={removeRoutine} setSelectedId={setSelectedId} updateTask={updateTask} />}
+                {page === 'Calendar' && <Calendar tasks={tasks} setSelectedId={setSelectedId} />}
+                {page === 'Statistics' && <Statistics tasks={tasks} routine={routine} />}
+                {page === 'Settings' && <Settings />}
+              </div>
+            </main>
+          </div>
+          <MobileNav page={page} setPage={setPage} />
+          <TaskPanel task={selectedTask} close={() => setSelectedId(null)} updateTask={updateTask} />
+          {showNewTask && <NewTaskModal task={newTask} setTask={setNewTask} close={() => setShowNewTask(false)} save={addTask} />}
+        </div>;
+      }
+
+      function Dashboard({ routine, tasks, allTasks, search, setSearch, addRoutine, removeRoutine, setSelectedId, updateTask }) {
+        const completed = allTasks.filter(task => task.done).length;
+        return <>
+          <section className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Summary label="Tasks today" value={allTasks.filter(t => t.due === '2026-08-28').length} sub="Keep the momentum going" color="bg-indigo-50 text-brand" icon="grid" />
+            <Summary label="Completed" value={`${completed}/${allTasks.length}`} sub="You are making progress" color="bg-emerald-50 text-emerald-600" icon="check" />
+            <Summary label="Upcoming" value={allTasks.filter(t => !t.done && t.due > '2026-08-28').length} sub="Tasks for the next days" color="bg-amber-50 text-amber-600" icon="calendar" />
+          </section>
+          <section className="mb-8 rounded-2xl bg-white p-5 shadow-soft sm:p-6">
+            <div className="mb-5 flex items-center justify-between"><div><h3 className="font-extrabold">Weekly routine</h3><p className="mt-1 text-xs text-slate-400">A light plan for a focused week</p></div><button className="text-xs font-bold text-brand">Week 35 <span className="ml-1">⌄</span></button></div>
+            <div className="scrollbar-thin overflow-x-auto pb-1"><div className="grid min-w-[760px] grid-cols-7 gap-3">{days.map((day, dayIndex) => <div key={day} className={'min-h-[176px] rounded-xl p-3 ' + (dayIndex === 3 ? 'bg-indigo-50 ring-1 ring-indigo-100' : 'bg-slate-50')}><div className="mb-3 flex items-center justify-between"><div><p className={'text-[11px] font-bold uppercase ' + (dayIndex === 3 ? 'text-brand' : 'text-slate-400')}>{day}</p><p className="text-sm font-extrabold">{25 + dayIndex}</p></div>{dayIndex === 3 && <span className="h-2 w-2 rounded-full bg-brand"/>}</div><div className="space-y-2">{routine[day].map((item, index) => <button title="Click to remove" onClick={() => removeRoutine(day, index)} key={item + index} className="block w-full rounded-lg bg-white px-2 py-2 text-left text-[11px] font-semibold leading-tight text-slate-600 shadow-sm transition hover:bg-rose-50 hover:text-rose-500">{item}</button>)}</div><button onClick={() => addRoutine(day)} className="mt-3 flex items-center gap-1 text-[11px] font-bold text-slate-400 transition hover:text-brand"><Icon name="plus" size={13}/> Add</button></div>)}</div></div>
+          </section>
+          <section className="rounded-2xl bg-white p-5 shadow-soft sm:p-6">
+            <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 className="font-extrabold">My tasks</h3><p className="mt-1 text-xs text-slate-400">Click a task to view and edit its details</p></div><label className="flex h-9 items-center gap-2 rounded-lg bg-slate-50 px-3 text-slate-400 sm:w-52"><Icon name="search" size={15}/><input value={search} onChange={e => setSearch(e.target.value)} className="w-full bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400" placeholder="Search tasks" /></label></div>
+            <div className="overflow-x-auto"><table className="w-full min-w-[600px] text-left"><thead><tr className="border-b border-slate-100 text-[11px] font-bold uppercase tracking-wider text-slate-400"><th className="w-12 pb-3">Done</th><th className="pb-3">Task name</th><th className="w-28 pb-3">Priority</th><th className="w-32 pb-3">Due date</th><th className="w-8 pb-3"></th></tr></thead><tbody>{tasks.map(task => <tr key={task.id} onClick={() => setSelectedId(task.id)} className="group cursor-pointer border-b border-slate-50 text-sm transition hover:bg-slate-50"><td className="py-3.5"><button onClick={e => { e.stopPropagation(); updateTask(task.id, {done: !task.done}); }} className={'grid h-5 w-5 place-items-center rounded-md border transition ' + (task.done ? 'border-brand bg-brand text-white' : 'border-slate-300 bg-white text-transparent hover:border-brand')}><Icon name="check" size={13} stroke={3}/></button></td><td className={'py-3.5 font-bold ' + (task.done ? 'text-slate-300 line-through' : 'text-slate-700')}>{task.name}<span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-400">{task.category}</span></td><td className="py-3.5"><Badge priority={task.priority}/></td><td className="py-3.5 text-xs font-semibold text-slate-500">{task.due === '2026-08-28' ? 'Today' : task.due === '2026-08-29' ? 'Tomorrow' : new Date(task.due + 'T00:00').toLocaleDateString('en-US', {month:'short', day:'numeric'})}</td><td className="py-3.5 text-slate-300 group-hover:text-slate-500"><Icon name="chevron" size={16}/></td></tr>)}</tbody></table></div>
+          </section>
+        </>;
+      }
+
+      function Summary({ label, value, sub, color, icon }) { return <div className="flex items-center gap-4 rounded-2xl bg-white p-4 shadow-soft"><div className={'grid h-11 w-11 place-items-center rounded-xl ' + color}><Icon name={icon} size={20}/></div><div><p className="text-xl font-extrabold">{value}</p><p className="text-xs font-bold text-slate-600">{label}</p><p className="mt-0.5 text-[10px] text-slate-400">{sub}</p></div></div>; }
+      function MobileNav({ page, setPage }) { return <nav className="fixed inset-x-0 bottom-0 z-20 flex justify-around border-t border-slate-100 bg-white py-2 lg:hidden">{[['Dashboard','grid'],['Calendar','calendar'],['Statistics','chart'],['Settings','settings']].map(([label, icon]) => <button key={label} onClick={() => setPage(label)} className={'grid justify-items-center gap-1 px-2 text-[10px] font-bold ' + (page === label ? 'text-brand' : 'text-slate-400')}><Icon name={icon} size={18}/>{label}</button>)}</nav>; }
+      function TaskPanel({ task, close, updateTask }) {
+        const [subtask, setSubtask] = useState('');
+        if (!task) return <div className="pointer-events-none fixed inset-y-0 right-0 z-30 w-full max-w-[390px] translate-x-full bg-white transition-transform"/>;
+        const addSubtask = e => { e.preventDefault(); if (!subtask.trim()) return; updateTask(task.id, { subtasks: [...task.subtasks, {id: Date.now(), title: subtask.trim(), done: false}] }); setSubtask(''); };
+        const toggleSubtask = id => updateTask(task.id, { subtasks: task.subtasks.map(item => item.id === id ? {...item, done: !item.done} : item) });
+        return <><div onClick={close} className="fixed inset-0 z-30 bg-slate-900/20 backdrop-blur-[1px]"/><aside className="scrollbar-thin fixed inset-y-0 right-0 z-40 w-full max-w-[390px] overflow-y-auto bg-white p-6 shadow-2xl transition-transform duration-300"><div className="mb-7 flex items-center justify-between"><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-brand">{task.category}</span><button onClick={close} className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><Icon name="close"/></button></div><input value={task.name} onChange={e => updateTask(task.id, {name: e.target.value})} className="w-full border-b border-transparent bg-transparent pb-2 text-2xl font-extrabold tracking-tight outline-none transition focus:border-brand"/><div className="mt-5 flex gap-2"><Badge priority={task.priority}/><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500">Due {task.due}</span></div><div className="mt-8"><h4 className="text-sm font-extrabold">Description</h4><textarea value={task.description} onChange={e => updateTask(task.id, {description: e.target.value})} className="mt-3 h-28 w-full resize-none rounded-xl bg-slate-50 p-3 text-sm leading-relaxed text-slate-600 outline-none ring-brand transition focus:ring-2" placeholder="Add a note to this task..."/></div><div className="mt-8"><div className="flex items-center justify-between"><h4 className="text-sm font-extrabold">Subtasks</h4><span className="text-xs font-bold text-slate-400">{task.subtasks.filter(s => s.done).length}/{task.subtasks.length}</span></div><div className="mt-3 space-y-2">{task.subtasks.map(item => <button key={item.id} onClick={() => toggleSubtask(item.id)} className="flex w-full items-center gap-3 rounded-xl p-2 text-left text-sm hover:bg-slate-50"><span className={'grid h-5 w-5 shrink-0 place-items-center rounded-md border ' + (item.done ? 'border-brand bg-brand text-white' : 'border-slate-300 text-transparent')}><Icon name="check" size={13} stroke={3}/></span><span className={item.done ? 'text-slate-400 line-through' : 'font-medium text-slate-600'}>{item.title}</span></button>)}</div><form onSubmit={addSubtask} className="mt-3 flex gap-2"><input value={subtask} onChange={e => setSubtask(e.target.value)} className="min-w-0 flex-1 rounded-lg bg-slate-50 px-3 py-2 text-xs outline-none ring-brand focus:ring-2" placeholder="Add subtask"/><button className="rounded-lg bg-indigo-50 px-3 text-brand"><Icon name="plus" size={16}/></button></form></div><button onClick={() => updateTask(task.id, {done: !task.done})} className={'mt-8 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition ' + (task.done ? 'bg-slate-100 text-slate-500' : 'bg-brand text-white shadow-lg shadow-indigo-200')}><Icon name="check" size={17}/>{task.done ? 'Marked complete' : 'Mark as complete'}</button></aside></>;
+      }
+      function NewTaskModal({ task, setTask, close, save }) { const change = (field, value) => setTask(current => ({...current, [field]: value})); return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/30 p-4"><form onSubmit={save} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><div className="mb-5 flex items-center justify-between"><h3 className="text-lg font-extrabold">Add a new task</h3><button type="button" onClick={close} className="text-slate-400"><Icon name="close"/></button></div><label className="block text-xs font-bold text-slate-500">Task name<input autoFocus value={task.name} onChange={e => change('name',e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-brand" placeholder="What needs to be done?"/></label><div className="mt-4 grid grid-cols-2 gap-3"><label className="text-xs font-bold text-slate-500">Priority<select value={task.priority} onChange={e => change('priority',e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none"><option>High</option><option>Medium</option><option>Low</option></select></label><label className="text-xs font-bold text-slate-500">Due date<input type="date" value={task.due} onChange={e => change('due',e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none"/></label></div><label className="mt-4 block text-xs font-bold text-slate-500">Category<select value={task.category} onChange={e => change('category',e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none"><option>Study</option><option>Work</option><option>Personal</option></select></label><button className="mt-6 w-full rounded-xl bg-brand py-3 text-sm font-bold text-white">Create task</button></form></div>; }
+      function Calendar({ tasks, setSelectedId }) { const dates = Array.from({length: 35}, (_, i) => i + 1); return <section className="rounded-2xl bg-white p-5 shadow-soft sm:p-6"><div className="mb-6 flex items-center justify-between"><div><h3 className="font-extrabold">August 2026</h3><p className="mt-1 text-xs text-slate-400">Your deadlines at a glance</p></div><div className="flex gap-2"><button className="rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold">‹</button><button className="rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold">›</button></div></div><div className="grid grid-cols-7 border-l border-t border-slate-100">{days.map(day => <div key={day} className="border-b border-r border-slate-100 p-2 text-center text-[11px] font-bold text-slate-400">{day}</div>)}{dates.map((date, i) => { const taskItems = tasks.filter(t => Number(t.due.slice(-2)) === date && t.due.startsWith('2026-08')); return <div key={date} className={'min-h-[100px] border-b border-r border-slate-100 p-2 ' + (i < 4 || date > 31 ? 'bg-slate-50/60 text-slate-300' : '')}>{date <= 31 && <><span className={'grid h-6 w-6 place-items-center rounded-full text-xs font-bold ' + (date === 28 ? 'bg-brand text-white' : '')}>{date}</span><div className="mt-1 space-y-1">{taskItems.map(task => <button onClick={() => setSelectedId(task.id)} key={task.id} className={'block w-full truncate rounded px-1.5 py-1 text-left text-[10px] font-bold ' + (task.done ? 'bg-emerald-50 text-emerald-500 line-through' : task.priority === 'High' ? 'bg-rose-50 text-rose-500' : 'bg-indigo-50 text-brand')}>{task.name}</button>)}</div></>}</div>})}</div></section>; }
+      function Statistics({ tasks, routine }) { const completed = tasks.filter(t => t.done).length; const totalRoutine = Object.values(routine).reduce((total, d) => total + d.length, 0); const priority = ['High','Medium','Low'].map(level => ({ level, count: tasks.filter(t => t.priority === level).length, color: level === 'High' ? 'bg-rose-400' : level === 'Medium' ? 'bg-amber-400' : 'bg-emerald-400' })); return <div className="grid gap-6 xl:grid-cols-5"><section className="rounded-2xl bg-white p-6 shadow-soft xl:col-span-3"><h3 className="font-extrabold">Weekly focus</h3><p className="mt-1 text-xs text-slate-400">Routine activity across the week</p><div className="mt-8 flex h-52 items-end justify-between gap-3">{days.map((day, index) => { const value = routine[day].length * 32 + (index % 3) * 14; return <div className="flex flex-1 flex-col items-center gap-2" key={day}><div className="w-full max-w-10 rounded-t-lg bg-brand/90 transition hover:bg-brand" style={{height: value + 'px'}}></div><span className="text-[11px] font-bold text-slate-400">{day}</span></div> })}</div></section><section className="rounded-2xl bg-gradient-to-br from-indigo-500 to-brand p-6 text-white shadow-lg shadow-indigo-100 xl:col-span-2"><p className="text-sm font-bold text-indigo-100">Completion rate</p><p className="mt-3 text-5xl font-extrabold">{tasks.length ? Math.round(completed / tasks.length * 100) : 0}%</p><p className="mt-2 text-sm text-indigo-100">{completed} of {tasks.length} tasks completed</p><div className="mt-7 h-2 overflow-hidden rounded-full bg-white/25"><div className="h-full rounded-full bg-white" style={{width: (tasks.length ? completed / tasks.length * 100 : 0) + '%'}}/></div><p className="mt-7 text-xs leading-relaxed text-indigo-100">You planned {totalRoutine} routine blocks. Keep showing up—the consistency is working.</p></section><section className="rounded-2xl bg-white p-6 shadow-soft xl:col-span-2"><h3 className="font-extrabold">Task priorities</h3><div className="mt-7 space-y-5">{priority.map(item => <div key={item.level}><div className="mb-2 flex justify-between text-xs font-bold"><span className="text-slate-500">{item.level}</span><span>{item.count}</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className={'h-full rounded-full ' + item.color} style={{width: (tasks.length ? item.count/tasks.length*100 : 0)+'%'}}/></div></div>)}</div></section><section className="rounded-2xl bg-white p-6 shadow-soft xl:col-span-3"><h3 className="font-extrabold">Motivation corner</h3><div className="mt-5 rounded-xl bg-amber-50 p-5"><p className="text-sm font-bold text-amber-800">“Success is the sum of small efforts, repeated day in and day out.”</p><p className="mt-2 text-xs text-amber-600">You are building a system, not chasing perfection.</p></div></section></div>; }
+      function Settings() { return <div className="max-w-2xl space-y-6"><section className="rounded-2xl bg-white p-6 shadow-soft"><h3 className="font-extrabold">Profile</h3><div className="mt-5 flex items-center gap-4"><div className="grid h-14 w-14 place-items-center rounded-full bg-orange-100 text-lg font-bold text-orange-600">C</div><div><p className="font-bold">Chawi</p><p className="text-sm text-slate-400">chawi@example.com</p></div></div></section><section className="rounded-2xl bg-white p-6 shadow-soft"><h3 className="font-extrabold">Notifications</h3><p className="mt-1 text-sm text-slate-400">Notification connections will be available when the online backend is added.</p><div className="mt-5 space-y-3"><Toggle label="Email reminders" detail="Receive a reminder before your task is due" checked/><Toggle label="Discord alerts" detail="Send a deadline alert to your Discord channel"/></div></section><section className="rounded-2xl border border-dashed border-indigo-200 bg-indigo-50 p-6"><h3 className="font-extrabold text-brand">Ready for online sync</h3><p className="mt-2 text-sm leading-relaxed text-slate-500">This version safely saves data in this browser. The next milestone will connect your account, database, email, and Discord notifications.</p></section></div>; }
+      function Toggle({label, detail, checked}) { const [on, setOn] = useState(checked); return <button onClick={() => setOn(!on)} className="flex w-full items-center justify-between rounded-xl bg-slate-50 p-4 text-left"><span><span className="block text-sm font-bold">{label}</span><span className="mt-1 block text-xs text-slate-400">{detail}</span></span><span className={'relative h-6 w-11 rounded-full transition ' + (on ? 'bg-brand' : 'bg-slate-300')}><span className={'absolute top-1 h-4 w-4 rounded-full bg-white shadow transition ' + (on ? 'left-6' : 'left-1')}/></span></button>; }
+      ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+  </body>
+</html>
