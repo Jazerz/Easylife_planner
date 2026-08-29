@@ -1,6 +1,21 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!--
+      Easylife Planner — single-file React planner.
+
+      Main features: task dashboard, weekly routine board, calendar, statistics,
+      dark mode, and Firebase email/password authentication with Firestore sync.
+
+      The React application starts in the script at the end of <body>:
+      - firebaseConfig and firebaseReady connect Firebase Authentication + Firestore.
+      - App stores tasks/routine data, loads the signed-in user's cloud data,
+        and saves changes to users/{userId}/planner/main.
+      - Dashboard, Calendar, Statistics, and Settings are the main views.
+
+      Setup reminder: enable Email/Password in Firebase Authentication and create
+      Cloud Firestore with security rules that limit each user to their own data.
+    -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Easylife Planner</title>
@@ -50,7 +65,38 @@
   <body>
     <div id="root"></div>
     <script type="text/babel">
+      // Get React tools used to store data and run code when the app changes.
       const { useEffect, useMemo, useState } = React;
+
+      // Firebase project details. These identify the Easylife Planner Firebase project.
+      // They are used by the browser to connect to Firebase Authentication and Firestore.
+      const firebaseConfig = {
+        apiKey: 'AIzaSyCWhRyeUCzOTxsg7W7Zw6hXUdaPZx8MnMk',
+        authDomain: 'easylife-planner.firebaseapp.com',
+        projectId: 'easylife-planner',
+        storageBucket: 'easylife-planner.firebasestorage.app',
+        messagingSenderId: '190948026697',
+        appId: '1:190948026697:web:96c752af2cd9cb97d0d298'
+      };
+
+      // Load only the Firebase features this planner needs:
+      // - firebase-app: starts the Firebase connection
+      // - firebase-auth: login, sign-up, and logout
+      // - firebase-firestore: cloud storage for tasks and weekly routines
+      const firebaseReady = Promise.all([
+        import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
+        import('https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js'),
+        import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js')
+      ]).then(([appSdk, authSdk, firestoreSdk]) => {
+        // Start Firebase with this project's configuration.
+        const app = appSdk.initializeApp(firebaseConfig);
+        // Return the authentication connection and Firebase functions for use in App.
+        return { auth: authSdk.getAuth(app), ...authSdk, ...firestoreSdk };
+      }).catch(error => {
+        // Keep the planner usable with browser storage if Firebase cannot connect.
+        console.error('Firebase could not start.', error);
+        return null;
+      });
 
       const initialTasks = [
         { id: 1, name: 'Read Biology chapter 4', priority: 'High', due: '2026-08-28', done: false, category: 'Study', description: 'Review cell division, then write a one-page summary.', subtasks: [{ id: 11, title: 'Read pages 84–102', done: true }, { id: 12, title: 'Make flashcards', done: false }] },
@@ -91,6 +137,11 @@
         const [search, setSearch] = useState('');
         const [showNewTask, setShowNewTask] = useState(false);
         const [routinePanel, setRoutinePanel] = useState(null);
+        const [showAuth, setShowAuth] = useState(false);
+        const [firebase, setFirebase] = useState(null);
+        const [user, setUser] = useState(null);
+        const [plannerReady, setPlannerReady] = useState(false);
+        const [authError, setAuthError] = useState('');
         const [darkMode, setDarkMode] = useState(() => localStorage.getItem('easylife-theme') === 'dark');
         const [newTask, setNewTask] = useState({ name: '', priority: 'Medium', due: '2026-08-30', category: 'Study' });
         const selectedTask = tasks.find(task => task.id === selectedId);
@@ -100,6 +151,34 @@
 
         useEffect(() => localStorage.setItem('easylife-tasks', JSON.stringify(tasks)), [tasks]);
         useEffect(() => localStorage.setItem('easylife-routine', JSON.stringify(routine)), [routine]);
+        useEffect(() => {
+          let unsubscribe;
+          firebaseReady.then(services => {
+            if (!services) { setPlannerReady(true); return; }
+            setFirebase(services);
+            unsubscribe = services.onAuthStateChanged(services.auth, async currentUser => {
+              setPlannerReady(false);
+              setUser(currentUser);
+              if (currentUser) {
+                try {
+                  const snapshot = await services.getDoc(services.doc(services.db || services.getFirestore(), 'users', currentUser.uid, 'planner', 'main'));
+                  if (snapshot.exists()) {
+                    const saved = snapshot.data();
+                    if (saved.tasks) setTasks(saved.tasks);
+                    if (saved.routine) setRoutine(normalizeRoutine(saved.routine));
+                  }
+                } catch (error) { setAuthError('Your account is signed in, but planner data could not be loaded. Check Firestore setup and rules.'); }
+              }
+              setPlannerReady(true);
+            });
+          });
+          return () => unsubscribe && unsubscribe();
+        }, []);
+        useEffect(() => {
+          if (!firebase || !user || !plannerReady) return;
+          const db = firebase.db || firebase.getFirestore();
+          firebase.setDoc(firebase.doc(db, 'users', user.uid, 'planner', 'main'), { tasks, routine, updatedAt: firebase.serverTimestamp() }, { merge: true }).catch(() => setAuthError('Changes are saved in this browser, but could not sync to Firestore.'));
+        }, [tasks, routine, firebase, user, plannerReady]);
         useEffect(() => {
           localStorage.setItem('easylife-theme', darkMode ? 'dark' : 'light');
           document.documentElement.classList.toggle('dark', darkMode);
@@ -119,6 +198,19 @@
           setNewTask({ name: '', priority: 'Medium', due, category: 'Study' });
           setShowNewTask(true);
         };
+        const authenticate = async (mode, email, password) => {
+          setAuthError('');
+          if (!firebase) { setAuthError('Firebase is still connecting. Please try again in a moment.'); return; }
+          try {
+            if (mode === 'signup') await firebase.createUserWithEmailAndPassword(firebase.auth, email, password);
+            else await firebase.signInWithEmailAndPassword(firebase.auth, email, password);
+            setShowAuth(false);
+          } catch (error) {
+            const messages = { 'auth/email-already-in-use': 'This email already has an account.', 'auth/invalid-email': 'Enter a valid email address.', 'auth/weak-password': 'Use a password with at least 6 characters.', 'auth/invalid-credential': 'Email or password is incorrect.' };
+            setAuthError(messages[error.code] || 'Authentication failed. Please check Firebase Authentication is enabled.');
+          }
+        };
+        const signOut = async () => { if (firebase) await firebase.signOut(firebase.auth); };
         const saveRoutine = (day, item, isNew) => setRoutine(current => ({ ...current, [day]: isNew ? [...current[day], item] : current[day].map(existing => existing.id === item.id ? item : existing) }));
         const toggleRoutine = (day, id) => setRoutine(current => ({ ...current, [day]: current[day].map(item => item.id === id ? { ...item, done: !item.done } : item) }));
 
@@ -142,7 +234,7 @@
             <main className="min-w-0 flex-1 overflow-hidden">
               <header className="flex h-[88px] items-center justify-between bg-cloud px-5 sm:px-8 lg:px-10">
                 <div><p className="text-xs font-semibold uppercase tracking-[.16em] text-brand">{page === 'Dashboard' ? 'Thursday, August 28' : 'Easylife Planner'}</p><h2 className="mt-1 text-2xl font-extrabold tracking-tight sm:text-[28px]">{page === 'Dashboard' ? 'Good morning, Chawi!' : page}</h2></div>
-                <div className="flex items-center gap-3"><button onClick={() => setDarkMode(current => !current)} aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} className="rounded-xl bg-white p-2.5 text-slate-500 shadow-sm transition hover:text-brand"><span className="text-base leading-none">{darkMode ? '☀︎' : '☾'}</span></button><button className="hidden rounded-xl bg-white p-2.5 text-slate-500 shadow-sm sm:block"><Icon name="bell" size={19}/></button><button onClick={() => setShowNewTask(true)} className="flex items-center gap-2 rounded-xl bg-brand px-3.5 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-600"><Icon name="plus" size={17}/><span className="hidden sm:inline">Add task</span></button></div>
+                <div className="flex items-center gap-3"><button onClick={() => setDarkMode(current => !current)} aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} className="rounded-xl bg-white p-2.5 text-slate-500 shadow-sm transition hover:text-brand"><span className="text-base leading-none">{darkMode ? '☀︎' : '☾'}</span></button>{user ? <div className="hidden items-center gap-2 sm:flex"><span title={user.email} className="max-w-28 truncate text-xs font-bold text-slate-500">{user.email}</span><button onClick={signOut} className="rounded-xl bg-white px-3 py-2.5 text-xs font-bold text-slate-500 shadow-sm transition hover:text-brand">Log out</button></div> : <button onClick={() => setShowAuth(true)} className="rounded-xl bg-white px-3 py-2.5 text-xs font-bold text-brand shadow-sm transition hover:bg-indigo-50">Log in</button>}<button onClick={() => setShowNewTask(true)} className="flex items-center gap-2 rounded-xl bg-brand px-3.5 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-600"><Icon name="plus" size={17}/><span className="hidden sm:inline">Add task</span></button></div>
               </header>
               <div className="scrollbar-thin h-[calc(100vh-88px)] overflow-y-auto px-5 pb-8 sm:px-8 lg:px-10">
                 {page === 'Dashboard' && <Dashboard routine={routine} tasks={visibleTasks} allTasks={tasks} search={search} setSearch={setSearch} openRoutine={setRoutinePanel} toggleRoutine={toggleRoutine} setSelectedId={setSelectedId} updateTask={updateTask} />}
@@ -156,6 +248,7 @@
           <TaskPanel task={selectedTask} close={() => setSelectedId(null)} updateTask={updateTask} />
           {routinePanel && <RoutinePanel key={routinePanel.day + routinePanel.item.id} entry={routinePanel} close={() => setRoutinePanel(null)} saveRoutine={saveRoutine} />}
           {showNewTask && <NewTaskModal task={newTask} setTask={setNewTask} close={() => setShowNewTask(false)} save={addTask} />}
+          {showAuth && <AuthModal close={() => { setShowAuth(false); setAuthError(''); }} authenticate={authenticate} error={authError} />}
         </div>;
       }
 
@@ -192,6 +285,13 @@
         const change = (field, value) => setItem(current => ({ ...current, [field]: value }));
         const submit = event => { event.preventDefault(); if (!item.title.trim()) return; saveRoutine(entry.day, { ...item, title: item.title.trim() }, entry.isNew); close(); };
         return <><div onClick={close} className="fixed inset-0 z-30 bg-slate-900/20 backdrop-blur-[1px]"/><aside className="scrollbar-thin fixed inset-y-0 right-0 z-40 w-full max-w-[390px] overflow-y-auto bg-white p-6 shadow-2xl"><form onSubmit={submit}><div className="mb-7 flex items-center justify-between"><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-brand">{dayLong[entry.day]}</span><button type="button" onClick={close} aria-label="Close routine panel" className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><Icon name="close"/></button></div><p className="text-xs font-bold uppercase tracking-wider text-slate-400">Weekly routine</p><input autoFocus value={item.title} onChange={event => change('title', event.target.value)} className="mt-2 w-full border-b border-transparent bg-transparent pb-2 text-2xl font-extrabold tracking-tight outline-none transition focus:border-brand" placeholder="Routine title"/><div className="mt-7"><label className="text-sm font-extrabold">Details</label><textarea value={item.details} onChange={event => change('details', event.target.value)} className="mt-3 h-32 w-full resize-none rounded-xl bg-slate-50 p-3 text-sm leading-relaxed text-slate-600 outline-none ring-brand transition focus:ring-2" placeholder="Add helpful details, a time, or a note..."/></div><button type="button" onClick={() => change('done', !item.done)} className="mt-6 flex w-full items-center gap-3 rounded-xl bg-slate-50 p-3 text-left"><span className={'grid h-5 w-5 place-items-center rounded-md border ' + (item.done ? 'border-brand bg-brand text-white' : 'border-slate-300 text-transparent')}><Icon name="check" size={13} stroke={3}/></span><span className="text-sm font-bold">{item.done ? 'Completed' : 'Mark as complete'}</span></button><button className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-brand py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200"><Icon name="check" size={17}/>{entry.isNew ? 'Add routine' : 'Save changes'}</button></form></aside></>;
+      }
+      function AuthModal({ close, authenticate, error }) {
+        const [mode, setMode] = useState('login');
+        const [email, setEmail] = useState('');
+        const [password, setPassword] = useState('');
+        const submit = event => { event.preventDefault(); authenticate(mode, email.trim(), password); };
+        return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4"><form onSubmit={submit} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><div className="mb-6 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-brand">Easylife Planner</p><h3 className="mt-1 text-xl font-extrabold">{mode === 'login' ? 'Welcome back' : 'Create your account'}</h3></div><button type="button" onClick={close} aria-label="Close login" className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100"><Icon name="close"/></button></div><p className="mb-5 text-sm text-slate-500">{mode === 'login' ? 'Log in to sync your planner across devices.' : 'Your tasks and routines will be stored securely in your account.'}</p>{error && <p className="mb-4 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-600">{error}</p>}<label className="block text-xs font-bold text-slate-500">Email address<input autoFocus required type="email" value={email} onChange={event => setEmail(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-transparent px-3 py-2.5 text-sm outline-none focus:border-brand" placeholder="you@example.com"/></label><label className="mt-4 block text-xs font-bold text-slate-500">Password<input required minLength="6" type="password" value={password} onChange={event => setPassword(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-transparent px-3 py-2.5 text-sm outline-none focus:border-brand" placeholder="At least 6 characters"/></label><button className="mt-6 w-full rounded-xl bg-brand py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200">{mode === 'login' ? 'Log in' : 'Create account'}</button><button type="button" onClick={() => setMode(current => current === 'login' ? 'signup' : 'login')} className="mt-4 w-full text-xs font-bold text-brand">{mode === 'login' ? 'New here? Create an account' : 'Already have an account? Log in'}</button></form></div>;
       }
       function NewTaskModal({ task, setTask, close, save }) { const change = (field, value) => setTask(current => ({...current, [field]: value})); return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/30 p-4"><form onSubmit={save} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><div className="mb-5 flex items-center justify-between"><h3 className="text-lg font-extrabold">Add a new task</h3><button type="button" onClick={close} className="text-slate-400"><Icon name="close"/></button></div><label className="block text-xs font-bold text-slate-500">Task name<input autoFocus value={task.name} onChange={e => change('name',e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-brand" placeholder="What needs to be done?"/></label><div className="mt-4 grid grid-cols-2 gap-3"><label className="text-xs font-bold text-slate-500">Priority<select value={task.priority} onChange={e => change('priority',e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none"><option>High</option><option>Medium</option><option>Low</option></select></label><label className="text-xs font-bold text-slate-500">Due date<input type="date" value={task.due} onChange={e => change('due',e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none"/></label></div><label className="mt-4 block text-xs font-bold text-slate-500">Category<select value={task.category} onChange={e => change('category',e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none"><option>Study</option><option>Work</option><option>Personal</option></select></label><button className="mt-6 w-full rounded-xl bg-brand py-3 text-sm font-bold text-white">Create task</button></form></div>; }
       function Calendar({ tasks, setSelectedId, addTaskForDate }) {
