@@ -111,7 +111,10 @@
       };
       const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       const dayLong = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
-      const normalizeRoutine = (saved) => Object.fromEntries(days.map(day => [day, (saved?.[day] || initialRoutine[day]).map((item, index) => typeof item === 'string' ? { id: `${day}-${index}-${item}`, title: item, details: '', done: false } : { ...item, details: item.details || '', done: Boolean(item.done) })]));
+      const emptyRoutine = Object.fromEntries(days.map(day => [day, []]));
+      const normalizeRoutine = (saved) => Object.fromEntries(days.map(day => [day, (saved?.[day] ?? []).map((item, index) => typeof item === 'string' ? { id: `${day}-${index}-${item}`, title: item, details: '', done: false } : { ...item, details: item.details || '', done: Boolean(item.done) })]));
+      // Detect the old demo-only planner so it can be cleared without touching real user-created tasks.
+      const isStarterPlanner = tasks => Array.isArray(tasks) && tasks.length === initialTasks.length && tasks.every(task => initialTasks.some(starter => starter.id === task.id && starter.name === task.name));
 
       function Icon({ name, size = 18, stroke = 2 }) {
         const paths = {
@@ -131,8 +134,8 @@
 
       function App() {
         const [page, setPage] = useState('Dashboard');
-        const [tasks, setTasks] = useState(initialTasks);
-        const [routine, setRoutine] = useState(initialRoutine);
+        const [tasks, setTasks] = useState([]);
+        const [routine, setRoutine] = useState(emptyRoutine);
         const [selectedId, setSelectedId] = useState(null);
         const [search, setSearch] = useState('');
         const [showNewTask, setShowNewTask] = useState(false);
@@ -167,8 +170,8 @@
               setUser(currentUser);
               if (!currentUser) {
                 applyingRemoteData.current = true;
-                setTasks(initialTasks);
-                setRoutine(initialRoutine);
+                setTasks([]);
+                setRoutine(emptyRoutine);
                 setSelectedId(null);
                 setShowNewTask(false);
                 setPlannerReady(true);
@@ -180,11 +183,17 @@
                 if (snapshot.exists()) {
                   const saved = snapshot.data();
                   applyingRemoteData.current = true;
-                  setTasks(saved.tasks || initialTasks);
-                  setRoutine(normalizeRoutine(saved.routine));
+                  if (isStarterPlanner(saved.tasks)) {
+                    setTasks([]);
+                    setRoutine(emptyRoutine);
+                    services.setDoc(plannerRef, { tasks: [], routine: emptyRoutine, starterDataCleared: true, updatedAt: services.serverTimestamp() }, { merge: true });
+                  } else {
+                    setTasks(saved.tasks || []);
+                    setRoutine(normalizeRoutine(saved.routine));
+                  }
                 } else {
                   // First-time account: create an empty starter planner document.
-                  services.setDoc(plannerRef, { tasks: initialTasks, routine: initialRoutine, updatedAt: services.serverTimestamp() });
+                  services.setDoc(plannerRef, { tasks: [], routine: emptyRoutine, starterDataCleared: true, updatedAt: services.serverTimestamp() });
                 }
                 setPlannerReady(true);
               }, () => { setAuthError('Your account is signed in, but planner data could not be loaded. Check Firestore setup and rules.'); setPlannerReady(true); });
