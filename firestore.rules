@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/planner/{plannerId} {
+      function owner() { return request.auth != null && request.auth.uid == userId
+        && (!exists(/databases/$(database)/documents/users/$(userId))
+          || get(/databases/$(database)/documents/users/$(userId)).data.get('deleting', false) != true); }
+      allow read: if owner();
+      allow create: if owner() && request.resource.data.revision == 1;
+      allow update: if owner() && request.resource.data.revision is int
+        && request.resource.data.revision == resource.data.get('revision', 0) + 1;
+      allow delete: if false;
+      match /reminderLog/{reminderId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+    }
+  }
+}
